@@ -41,7 +41,7 @@ class Dataset(_DatasetBase):
 
     def target_tt_split(self,
                         test_size: float = 0.2,
-                        random_state: int = 0
+                        random_state: int = 42
                         ):
         """
         Returns train and valid Dataset objects

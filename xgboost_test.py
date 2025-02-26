@@ -4,20 +4,29 @@
 import xgboost as xgb
 from sklearn.pipeline import Pipeline
 
-from lib import Dataset
+from lib import Dataset, make_standart_preprocessor_for
+
+from warnings import warn
 
 
 def main():
-    dataset = Dataset()
+    from sklearn.datasets import load_wine
+    dataset = Dataset(*load_wine(return_X_y=True))
     train, test = dataset.target_tt_split()
 
-    pipeline = Pipeline([
-        ("model", xgb.XGBClassifier())
-    ], memory=None)
+    steps = {
+        "preprocessor": make_standart_preprocessor_for(train.X),
+        "model": xgb.XGBClassifier(n_estimators=42, max_depth=42, learning_rate=0.042),
+    }
 
-    pipeline.fit(*train)
+    pipeline = Pipeline(list(steps.items()), memory=None)
+    try:
+        pipeline.fit_transform(*train)
+    except AttributeError:
+        warn("This Pipeline has no attribute 'fit_transform'. Using 'fit' instead.")
+        pipeline.fit(*train)
 
-    print(test.mae_percentage(pipeline))
+    print(round(test.mae_percentage(pipeline), 4))
 
 
 if __name__ == '__main__':
