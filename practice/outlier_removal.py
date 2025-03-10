@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import mean_absolute_error
 from sklearn.tree import DecisionTreeRegressor
 
-from lib import Dataset
+from lib import SklearnDataset
 
 
-def get_mae(max_leaf_nodes, train: Dataset, val: Dataset):
+def get_mae(max_leaf_nodes, train: SklearnDataset, val: SklearnDataset):
     model = DecisionTreeRegressor(max_leaf_nodes=max_leaf_nodes, random_state=0)
     model.fit(train.X, train.y)
     preds_val = model.predict(val.X)

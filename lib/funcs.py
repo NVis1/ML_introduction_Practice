@@ -6,7 +6,7 @@ from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 
-from lib import Dataset
+from lib import SklearnDataset
 
 
 def make_standart_preprocessor_for(X: DataFrame):
@@ -70,8 +70,8 @@ def target_tt_split(df: DataFrame, y_col_name: str,
         random_state=random_state
     )
 
-    train = Dataset(X_train, y_train)
-    valid = Dataset(X_valid, y_valid)
+    train = SklearnDataset(X_train, y_train)
+    valid = SklearnDataset(X_valid, y_valid)
 
     return train, valid
 

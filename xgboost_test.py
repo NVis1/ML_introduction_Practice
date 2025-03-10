@@ -2,16 +2,18 @@
 
 
 import xgboost as xgb
+from pandas import DataFrame
 from sklearn.pipeline import Pipeline
+import pickle
 
-from lib import Dataset, make_standart_preprocessor_for
+from lib import SklearnDataset, make_standart_preprocessor_for
 
 from warnings import warn
 
 
-def main():
-    from sklearn.datasets import load_wine
-    dataset = Dataset(*load_wine(return_X_y=True))
+def main(Xy):
+    dataset = SklearnDataset(*Xy)
+
     train, test = dataset.target_tt_split()
 
     steps = {
@@ -20,6 +22,7 @@ def main():
     }
 
     pipeline = Pipeline(list(steps.items()), memory=None)
+
     try:
         pipeline.fit_transform(*train)
     except AttributeError:
@@ -30,4 +33,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    from sklearn.datasets import load_wine
+    main(
+        load_wine(return_X_y=True)
+    )

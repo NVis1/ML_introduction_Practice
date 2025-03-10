@@ -1,4 +1,5 @@
 from typing import Callable
+from warnings import warn
 
 import pandas as pd
 import numpy as np
@@ -15,29 +16,28 @@ class _DatasetBase:
         return iter((self.X, self.y))
 
 
-class Dataset(_DatasetBase):
+class BasicDataset(_DatasetBase):
     @classmethod
-    def from_df(cls, df: pd.DataFrame, y_col_name: str, remove_features: list[str] = None):
-        if remove_features is None:
-            remove_features = []
+    def from_df(cls, df: pd.DataFrame,
+                y_col_name: str,
+                remove_features:  list[str] | None = None,
+                include_features: list[str] | None = None):
+        y = df[y_col_name]
+
+        remove_features = remove_features or []
         remove_features.append(y_col_name)
 
-        y = df[y_col_name]
         X = df.drop(remove_features, axis=1)
+        if include_features:
+            X = X[include_features]
 
         return cls(X, y)
-    
-    def mae_percentage(self, pipeline: Pipeline, cv=5) -> float:
-        """
-        Returns positive mean absolute error score for a given pipeline
-        muptiplied by 100 (in percents) via cross-validation mean,
-        calculated using dataset's X and y values.
-        """
-        return np.mean(-100 * cross_val_score(
-            pipeline, self.X, self.y,
-            cv=cv,
-            scoring='neg_mean_absolute_error'
-        ))
+
+
+class SklearnDataset(BasicDataset):
+    """
+
+    """
 
     def target_tt_split(self,
                         test_size: float = 0.2,
@@ -53,7 +53,43 @@ class Dataset(_DatasetBase):
             random_state=random_state
         )
 
-        train = Dataset(X_train, y_train)
-        valid = Dataset(X_valid, y_valid)
+        train = SklearnDataset(X_train, y_train)
+        valid = SklearnDataset(X_valid, y_valid)
 
         return train, valid
+
+    """
+    
+    ====================================================
+    ==================== DEPRECATED ====================
+    ====================================================
+    
+    """
+
+    # Moved to BetterPipeline.mae_percentage.
+    def mae_percentage(self, pipeline: Pipeline, cv=5) -> float:
+        """
+        ========== DEPRECATED ==========
+        Moved to BetterPipeline.mae_percentage. Consider using it instead.
+
+        Returns positive mean absolute error score for a given pipeline muptiplied by 100 (in percents) via
+        cross-validation mean, calculated using dataset's X and y values.
+        """
+        return np.mean(-100 * cross_val_score(
+            pipeline, self.X, self.y,
+            cv=cv,
+            scoring='neg_mean_absolute_error'
+        ))
+
+    # ==================== DEPRECATED ====================
+    # Moved to BetterPipeline.fit_try_transform.
+    def train_and_transform_to(self, pipeline):
+        """
+        ========== DEPRECATED ==========
+        Moved to BetterPipeline.fit_try_transform. Consider using it instead.
+        """
+        try:
+            pipeline.fit_transform(self.X, self.y)
+        except AttributeError:
+            warn("This Pipeline has no attribute 'fit_transform'. Using 'fit' instead.")
+            pipeline.fit(self.X, self.y)
