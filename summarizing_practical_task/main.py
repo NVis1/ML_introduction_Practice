@@ -1,136 +1,146 @@
+import os
+
+import joblib
 import pandas as pd
 
-from sklearn.compose import ColumnTransformer
 from sklearn.inspection import permutation_importance
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
-from sklearn.impute import SimpleImputer
-from feature_engine.imputation import CategoricalImputer
+from sklearn.preprocessing import LabelEncoder
 
-from sklearn.pipeline import Pipeline
-
-from lib import SklearnDataset, BetterPipeline
+from lib import SklearnDataset
 
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from xgboost import XGBRFClassifier
+
+from summarizing_practical_task.model_handler import ModelHandler
 
 
 def old_get_feature_importance_for(model, transformer):
     return pd.DataFrame({
         "Feature": transformer.get_feature_names_out(),
         "Importance": model.feature_importances_
-    }).sort_values(by='Importance', ascending=False)
+    }).sort_values(by="Importance", ascending=False)
 
 
-def main(df: pd.DataFrame):
-    dataset = create_dataset(df, y_col_name="Churn")
+def main(df: pd.DataFrame, models, remove_features: list[str] = None, include_features: list[str] = None):
+    dataset = create_dataset(df, y_col_name="Churn",
+                             remove_features=remove_features, include_features=include_features)
 
-    models = {
-        "XGBoostRandomForest": XGBRFClassifier(
-            n_estimators=42, random_state=42),
-        "XGBoost": XGBClassifier(
-            n_estimators=42, random_state=42),
-        "RandomForest": RandomForestClassifier(
-            n_estimators=42, random_state=42),
-    }
+    handler = ModelHandler(*dataset.target_tt_split())
+    handler.make_column_transformer(dataset.X)
 
-    # ToDo Add GridSearchCV
+    results = []
+    for k, v in models.items():
+        print(f"\n==========MODEL TEST: {k}==========")
+        pl = handler.handle(v["model"], v["param_grid"])
+        results.append({
+            "name": k,
+            "model": pl,
+            "score": pl.score(*handler.test)
+        })
 
-    for name, model in models.items():
-        print(f"\n\n==========MODEL TEST: {name}==========\n")
-        handle_model(model, dataset)
+    print("\n==========RESULTS==========\n")
+    for index, i in enumerate(results):
+        print(f"\t[{index+1}] Model: {i['name']} best cross-validation score: {i['score']*100}%;")
+    print("\n")
+
+    choose_and_save(results)
 
 
-def create_dataset(df, y_col_name: str):
+def create_dataset(df, y_col_name: str, remove_features: list[str], include_features: list[str]):
     # print(df.dtypes)
 
-    # Fixes error with TotalCharges column being incorrectly identified as non-categorical.
+    # Fixes error with TotalCharges column being incorrectly identified as categorical.
     df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
+
     df[y_col_name] = LabelEncoder().fit_transform(df[y_col_name])
 
     return SklearnDataset.from_df(
         df, y_col_name=y_col_name,
-        remove_features=["customerID"],
-        include_features=["InternetService", "OnlineSecurity", "Contract", "TechSupport",
-                          "tenure", "MultipleLines", "PhoneService", "TotalCharges"]
+        remove_features=remove_features,
+        include_features=include_features
     )
 
 
-def handle_model(model, dataset):
-    transformer = make_column_transformer(dataset.X)
-    steps = {
-        "transform": transformer,
-        "model": model
+def choose_and_save(results):
+    print("Which one to save? (0 if none)")
+    while True:
+        choice: str = input("> ")
+        if not choice.isdigit():
+            print("Please enter a number corresponding to model you want to save, or 0 if none.")
+            continue
+
+        choice: int = int(choice) - 1
+        if not -1 < choice < len(results):
+            print("Incorrect number provided.")
+            continue
+
+        if choice == -1:
+            print("No model was saved.")
+        else:
+            newest = "model-newest.joblib"
+            if os.path.exists(newest):
+                os.rename(newest, get_next_model_version_name())
+
+            joblib.dump(results[choice]["model"], newest)
+            print("Model was saved.")
+        break
+
+
+def get_next_model_version_name():
+    """
+    Finds the next available model version based on existing files.
+    Notice: This code is CHATGPT-SUGGESTED for greater convenience in saving versions and may not be the best.
+    Revise and rewrite later.
+    """
+    import re
+    files = os.listdir()
+    pattern = re.compile(r"model-v(\d+)\.joblib")
+
+    versions = [int(match.group(1)) for f in files if (match := pattern.match(f))]
+    v = max(versions, default=0) + 1  # Increment from the highest version
+
+    return f"model-v{v}.joblib"
+
+
+def models_for_gridsearch():
+    return {
+        "XGBoostRandomForest": {
+            "model": XGBRFClassifier(
+                random_state=42, verbosity=0, warm_start=True),
+            "param_grid": {
+                "n_estimators": [42, 200, 500],
+                "max_features": ["auto", 5, 10, 20, 42],
+                "min_samples_leaf": [4, 2],
+                "max_depth": [4, 6, 8],
+                "criterion": ["gini", "entropy"]
+            }
+        },
+        "XGBoost": {
+            "model": XGBClassifier(random_state=42, verbosity=0, warm_start=True, booster="gblinear"),
+            "param_grid": {
+                "booster": ["btree", "gblinear"]
+            }
+        },
+        "RandomForest": {
+            "model": RandomForestClassifier(random_state=42, verbose=0, warm_start=True),
+            "param_grid": {
+                "n_estimators": [42, 200, 500],
+                "max_features": ["auto", "sqrt", "log2", 5, 10, 20],
+                "min_samples_leaf": [1, 3, 5],
+                "max_depth": [4, 6, 8],
+                "criterion": ["gini", "entropy"]
+            }
+        },
     }
-
-    train, test = dataset.target_tt_split()
-
-    pl = BetterPipeline(steps=steps, memory=None)
-    pl.fit_try_transform(*train)
-
-    # res = dict(
-    #     score=pl.score(*test),
-    #     mae_score=pl.mae_percentage(*test),
-    #     **metrics_test(test.y, pl.predict(test.X))
-    # )
-    res = pl.metrics(*test)
-
-    print("Scores:")
-    for k, v in res.items():
-        print(f"\t{k}: {round(v, 4)}")
-
-    print("\nFeature importance:")
-    # importance_res = get_feature_importance_for(pl, *train)
-    importance_res = pl.get_feature_importance_for(*train)
-    for k, v in importance_res.items():
-        print(f"\t{k}: {round(v, 4)}")
-
-
-def make_column_transformer(X: pd.DataFrame):
-    num_X = X.select_dtypes(include=["number", "int64", "float64"]).columns
-    cat_X = X.select_dtypes(include=["object", "string"]).columns
-
-    num_pl = Pipeline([
-        ("imputer", SimpleImputer(strategy="median")),
-        ("scaler", StandardScaler()),
-    ])
-
-    cat_pl = Pipeline([
-        ("imputer", CategoricalImputer()),
-        ("encoder", OneHotEncoder(sparse_output=False, handle_unknown="ignore")),
-    ])
-
-    return ColumnTransformer([
-        ("num_transformer", num_pl, num_X),
-        ("cat_transformer", cat_pl, cat_X)
-    ])
-
-
-# implemented in BetterPipeline
-def metrics_test(y_test, y_pred):
-    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-    return dict(
-        accuracy=accuracy_score(y_test, y_pred),
-        precision=precision_score(y_test, y_pred),
-        recall=recall_score(y_test, y_pred),
-        f1=f1_score(y_test, y_pred),
-    )
-
-
-# implemented in BetterPipeline
-def get_feature_importance_for(model, X, y):
-    importance = permutation_importance(
-        model, X.sample(frac=0.2, random_state=42), y.sample(frac=0.2, random_state=42),
-        scoring="accuracy", n_repeats=4, random_state=42, n_jobs=-1
-    ).importances_mean
-
-    return pd.Series(
-        data=importance,
-        index=X.columns
-    ).sort_values(ascending=False)
 
 
 if __name__ == '__main__':
     main(
-        df=pd.read_csv("../datasets/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        df=pd.read_csv(
+            "../datasets/WA_Fn-UseC_-Telco-Customer-Churn.csv"
+        ).sample(frac=0.5, random_state=42),
+        models=models_for_gridsearch(),
+        remove_features=["customerID"],
+        include_features=["InternetService", "Contract", "tenure", "TotalCharges"]  # identified via feature importance
     )
