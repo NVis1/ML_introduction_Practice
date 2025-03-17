@@ -14,6 +14,8 @@ from xgboost import XGBRFClassifier
 
 from summarizing_practical_task.model_handler import ModelHandler
 
+import logging
+
 
 def old_get_feature_importance_for(model, transformer):
     return pd.DataFrame({
