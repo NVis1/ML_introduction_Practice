@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY .summarizing_practical_task .
+COPY summarizing_practical_task/ .
 
 EXPOSE 5000
 
