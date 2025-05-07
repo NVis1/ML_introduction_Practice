@@ -121,7 +121,6 @@ def models_for_gridsearch():
         "XGBoost": {
             "model": XGBClassifier(random_state=42, verbosity=0, warm_start=True, booster="gblinear"),
             "param_grid": {
-                "booster": ["btree", "gblinear"]
             }
         },
         "RandomForest": {

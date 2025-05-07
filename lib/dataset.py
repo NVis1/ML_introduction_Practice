@@ -22,16 +22,17 @@ class BasicDataset(_DatasetBase):
                 y_col_name: str,
                 remove_features:  list[str] | None = None,
                 include_features: list[str] | None = None):
-        y = df[y_col_name]
+        if remove_features:
+            remove_features.append(y_col_name)
+        else:
+            remove_features = [y_col_name]
 
-        remove_features = remove_features or []
-        remove_features.append(y_col_name)
+        X = df.drop(columns=remove_features)
 
-        X = df.drop(remove_features, axis=1)
         if include_features:
             X = X[include_features]
 
-        return cls(X, y)
+        return cls(X, y=df[y_col_name].values.ravel())
 
 
 class SklearnDataset(BasicDataset):
